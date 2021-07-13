@@ -1,0 +1,61 @@
+version: "3"
+services:
+
+  opensearch:
+    image: opensearchproject/opensearch:latest
+    environment:
+      - node.name=opensearch
+      - discovery.type=single-node
+      - bootstrap.memory_lock=true # along with the memlock settings below, disables swapping
+      - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m" # minimum and maximum Java heap size, recommend setting both to 50% of system RAM
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536 # maximum number of open files for the OpenSearch user, set to at least 65536 on modern systems
+        hard: 65536
+    # volumes:
+      # - opensearch-data1:/usr/share/opensearch/data
+    ports:
+      - 9200:9200
+      # - 9600:9600 # required for Performance Analyzer
+    restart: unless-stopped
+
+  dashboards:
+    image: opensearchproject/opensearch-dashboards:latest
+    depends_on:
+      - opensearch
+    ports:
+      - 5601:5601
+    environment:
+      OPENSEARCH_HOSTS: '["https://opensearch:9200"]'
+    restart: unless-stopped
+
+  app:
+    image: springcommunity/spring-framework-petclinic:5.3.0
+    depends_on:
+      - fluentd
+    ports:
+      - 8080:8080
+    logging:
+      driver: "fluentd"
+      options:
+        fluentd-address: localhost:24224
+        tag: petclinic
+    restart: unless-stopped
+
+  fluentd:
+    build: ./fluentd/
+    image: dcagatay/fluentd:latest
+    volumes:
+      - ./config/fluentd:/fluentd/etc
+    depends_on:
+      - opensearch
+    ports:
+      - "24224:24224"
+      - "24224:24224/udp"
+    restart: unless-stopped
+
+# volumes:
+#   opensearch-data1:
